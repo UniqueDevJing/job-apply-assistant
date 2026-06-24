@@ -1,18 +1,1262 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>简历投递助手</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>简历投递助手</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css">
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  .kanban-col .card-list { min-height: 100px; }
+  .kanban-card { cursor: grab; user-select: none; }
+  .kanban-card:active { cursor: grabbing; }
+  .kanban-card.dragging { opacity: 0.4; }
+  .kanban-col.drag-over { background: #e0f2fe !important; }
+  .chart-bar { transition: height 0.5s ease; }
+  .donut-ring { border-radius: 50%; }
+  .toast-anim { animation: slideIn 0.3s ease; }
+  @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  .context-menu-item:hover { background: #f1f5f9; }
+  .upload-zone.drag-over { border-color: #3b82f6; background: #eff6ff; }
+  .tab-sidebar-btn { transition: all 0.15s; }
+  .tab-sidebar-btn:hover { background: rgba(255,255,255,0.1); }
+  .tab-sidebar-btn.active { background: rgba(59,130,246,0.3); border-left: 3px solid #3b82f6; }
+  .candidate-card { transition: all 0.15s; }
+  .candidate-card:hover { border-color: #3b82f6; background: #f0f7ff; }
+  .candidate-card.selected { border-color: #3b82f6; background: #eff6ff; }
+  .msg-bubble { max-width: 80%; }
+  .pulse-loader { animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+</style>
 </head>
-<body class="bg-gray-100">
-  <div id="app" class="flex items-center justify-center min-h-screen">
-    <div class="text-center">
-      <i class="fa fa-spinner fa-spin fa-3x text-blue-600"></i>
-      <p class="mt-4 text-gray-600">加载中...</p>
+<body>
+
+<div id="app" class="flex h-screen bg-gray-100">
+
+  <!-- ===== Sidebar ===== -->
+  <aside class="w-48 bg-slate-800 text-white flex flex-col flex-shrink-0">
+    <div class="h-14 flex items-center px-4 border-b border-slate-700">
+      <i class="fa fa-paper-plane text-blue-400 mr-2"></i>
+      <span class="font-bold text-base">投递助手</span>
+    </div>
+    <nav class="flex-1 py-2">
+      <button class="tab-sidebar-btn active w-full flex items-center gap-3 px-4 py-2.5 text-sm" data-tab="applications">
+        <i class="fa fa-th-large w-4 text-center"></i><span>投递管理</span>
+      </button>
+      <button class="tab-sidebar-btn w-full flex items-center gap-3 px-4 py-2.5 text-sm" data-tab="messages">
+        <i class="fa fa-comments w-4 text-center"></i><span>消息助手</span>
+      </button>
+      <button class="tab-sidebar-btn w-full flex items-center gap-3 px-4 py-2.5 text-sm" data-tab="search">
+        <i class="fa fa-search w-4 text-center"></i><span>公司搜索</span>
+      </button>
+      <button class="tab-sidebar-btn w-full flex items-center gap-3 px-4 py-2.5 text-sm" data-tab="stats">
+        <i class="fa fa-bar-chart w-4 text-center"></i><span>数据统计</span>
+      </button>
+      <button class="tab-sidebar-btn w-full flex items-center gap-3 px-4 py-2.5 text-sm" data-tab="templates">
+        <i class="fa fa-file-text w-4 text-center"></i><span>模板管理</span>
+      </button>
+    </nav>
+    <div class="border-t border-slate-700 p-3">
+      <button id="settingsBtn" class="tab-sidebar-btn w-full flex items-center gap-3 px-4 py-2 text-sm rounded">
+        <i class="fa fa-cog w-4 text-center"></i><span>设置</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ===== Main Content ===== -->
+  <main class="flex-1 flex flex-col overflow-hidden">
+    <!-- Header -->
+    <header class="bg-white border-b border-gray-200 h-14 flex items-center justify-between px-6 flex-shrink-0">
+      <h1 id="pageTitle" class="text-lg font-semibold text-gray-800">投递管理</h1>
+      <div class="flex items-center gap-2">
+        <span id="connectionStatus" class="text-xs px-2 py-1 rounded-full bg-gray-200 text-gray-500">
+          <i class="fa fa-circle-o"></i> 未连接
+        </span>
+      </div>
+    </header>
+
+    <!-- ==================== TAB 1: 投递管理 ==================== -->
+    <div id="tab-applications" class="tab-pane flex flex-col flex-1 overflow-hidden">
+      <div class="bg-white border-b px-4 py-3 flex items-center gap-3 flex-shrink-0">
+        <div class="relative flex-1 max-w-md">
+          <i class="fa fa-search absolute left-3 top-2.5 text-gray-400 text-sm"></i>
+          <input id="searchInput" type="text" placeholder="搜索公司 / 岗位..." class="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+        </div>
+        <button id="newAppBtn" class="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">
+          <i class="fa fa-plus"></i> 新建投递
+        </button>
+      </div>
+      <div id="kanbanContainer" class="flex-1 flex gap-4 p-4 overflow-x-auto">
+        <!-- 4 columns rendered by JS -->
+      </div>
+    </div>
+
+    <!-- ==================== TAB 2: 消息助手 ==================== -->
+    <div id="tab-messages" class="tab-pane hidden flex-1 flex overflow-hidden">
+      <div class="w-64 border-r border-gray-200 bg-white flex flex-col flex-shrink-0">
+        <div class="p-3 border-b border-gray-200 font-medium text-sm text-gray-700 bg-gray-50">投递列表</div>
+        <div id="msgAppList" class="flex-1 overflow-y-auto">
+          <div class="p-4 text-center text-gray-400 text-sm">加载中...</div>
+        </div>
+      </div>
+      <div class="flex-1 flex flex-col overflow-hidden">
+        <div id="msgHeader" class="px-4 py-3 border-b border-gray-200 bg-white flex items-center gap-2 flex-shrink-0">
+          <span class="text-gray-400 text-sm">请选择一个投递记录</span>
+        </div>
+        <div id="msgChat" class="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
+          <div class="flex items-center justify-center h-full text-gray-400">
+            <i class="fa fa-comment-o mr-2"></i> 选择左侧投递查看消息记录
+          </div>
+        </div>
+        <div id="msgInputArea" class="border-t border-gray-200 bg-white p-4 flex-shrink-0">
+          <textarea id="msgTextarea" rows="3" placeholder="粘贴 HR 的消息，然后点击生成回复..." class="w-full border border-gray-300 rounded-lg p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+          <div class="flex items-center gap-2 mt-2 flex-wrap">
+            <span class="text-xs text-gray-500 mr-1">语气:</span>
+            <button class="tone-btn px-3 py-1 text-xs rounded-full border border-gray-300 hover:border-blue-500" data-tone="正式">正式</button>
+            <button class="tone-btn px-3 py-1 text-xs rounded-full border border-blue-500 bg-blue-50 text-blue-700" data-tone="友好">友好</button>
+            <button class="tone-btn px-3 py-1 text-xs rounded-full border border-gray-300 hover:border-blue-500" data-tone="简洁">简洁</button>
+            <span class="flex-1"></span>
+            <button id="generateBtn" class="px-4 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition disabled:opacity-50" disabled>生成回复</button>
+          </div>
+          <div id="candidatesArea" class="mt-3 space-y-2 hidden">
+            <div class="text-xs text-gray-500 font-medium">生成的回复候选：</div>
+            <div id="candidatesList" class="space-y-2"></div>
+            <div class="flex gap-2">
+              <button id="copySendBtn" class="px-4 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition">复制并发送</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== TAB 3: 公司搜索 ==================== -->
+    <div id="tab-search" class="tab-pane hidden flex-1 flex flex-col">
+      <div class="bg-white border-b px-4 py-3 flex items-center gap-2 flex-shrink-0">
+        <input id="searchUrlInput" type="url" placeholder="输入 BOSS 直聘岗位 URL..." value="https://www.zhipin.com/" class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <button id="loadUrlBtn" class="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition">
+          <i class="fa fa-arrow-right mr-1"></i> 加载
+        </button>
+      </div>
+      <div class="flex-1 relative bg-gray-200 flex items-center justify-center" id="webviewContainer">
+        <div id="webviewPlaceholder" class="text-center text-gray-400">
+          <i class="fa fa-globe fa-4x mb-3"></i>
+          <p class="text-sm">webview 仅在 Electron 环境中可用</p>
+          <p class="text-xs mt-1">在浏览器中预览无法加载外部页面</p>
+        </div>
+        <button id="saveJobBtn" class="absolute bottom-6 right-6 px-5 py-3 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 transition flex items-center gap-2 z-10">
+          <i class="fa fa-heart"></i> 收藏此岗位
+        </button>
+      </div>
+    </div>
+
+    <!-- ==================== TAB 4: 数据统计 ==================== -->
+    <div id="tab-stats" class="tab-pane hidden flex-1 overflow-y-auto p-6">
+      <div id="statsContent">
+        <div class="text-center text-gray-400 py-20"><i class="fa fa-spinner fa-spin mr-2"></i>加载中...</div>
+      </div>
+    </div>
+
+    <!-- ==================== TAB 5: 模板管理 ==================== -->
+    <div id="tab-templates" class="tab-pane hidden flex-1 overflow-y-auto">
+      <div class="bg-white border-b px-4 py-3 flex items-center justify-between flex-shrink-0">
+        <span class="text-sm text-gray-500">管理常用回复模板</span>
+        <button id="newTemplateBtn" class="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">
+          <i class="fa fa-plus"></i> 新建模板
+        </button>
+      </div>
+      <div id="templateGrid" class="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <!-- rendered by JS -->
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ===== Modal: New Application ===== -->
+<div id="modal-app" class="fixed inset-0 bg-black/50 flex items-center justify-center hidden z-50">
+  <div class="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+    <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+      <h3 class="font-semibold text-lg">新建投递</h3>
+      <button class="close-modal text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+    </div>
+    <div class="p-6 space-y-4">
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">公司 <span class="text-red-500">*</span></label>
+          <input id="app-form-company" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="公司名称">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">岗位 <span class="text-red-500">*</span></label>
+          <input id="app-form-position" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="岗位名称">
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">薪资</label>
+          <input id="app-form-salary" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="例如: 15-25K">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">地点</label>
+          <input id="app-form-location" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="工作地点">
+        </div>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">链接</label>
+        <input id="app-form-link" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="BOSS直聘岗位链接 (可选)">
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">备注</label>
+        <textarea id="app-form-note" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" placeholder="备注信息 (可选)"></textarea>
+      </div>
+    </div>
+    <div class="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+      <button class="close-modal px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition">取消</button>
+      <button id="saveAppBtn" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">保存</button>
     </div>
   </div>
+</div>
+
+<!-- ===== Modal: Template ===== -->
+<div id="modal-template" class="fixed inset-0 bg-black/50 flex items-center justify-center hidden z-50">
+  <div class="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4">
+    <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+      <h3 id="templateModalTitle" class="font-semibold text-lg">新建模板</h3>
+      <button class="close-modal text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+    </div>
+    <div class="p-6 space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">模板名称 <span class="text-red-500">*</span></label>
+        <input id="template-form-name" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="例如: 初次打招呼">
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">模板内容 <span class="text-red-500">*</span></label>
+        <textarea id="template-form-content" rows="6" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" placeholder="输入模板内容，支持变量插入..."></textarea>
+        <div class="flex items-center gap-2 mt-2">
+          <span class="text-xs text-gray-500">快速插入:</span>
+          <button class="var-btn px-2.5 py-1 text-xs rounded border border-gray-300 hover:border-blue-500 hover:text-blue-600" data-var="{公司名}">{公司名}</button>
+          <button class="var-btn px-2.5 py-1 text-xs rounded border border-gray-300 hover:border-blue-500 hover:text-blue-600" data-var="{岗位名}">{岗位名}</button>
+          <button class="var-btn px-2.5 py-1 text-xs rounded border border-gray-300 hover:border-blue-500 hover:text-blue-600" data-var="{姓名}">{姓名}</button>
+        </div>
+      </div>
+    </div>
+    <div class="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+      <button class="close-modal px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition">取消</button>
+      <button id="saveTemplateBtn" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Modal: Settings ===== -->
+<div id="modal-settings" class="fixed inset-0 bg-black/50 flex items-center justify-center hidden z-50">
+  <div class="bg-white rounded-xl shadow-xl w-full max-w-xl mx-4 max-h-[90vh] overflow-y-auto">
+    <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+      <h3 class="font-semibold text-lg">设置</h3>
+      <button class="close-modal text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+    </div>
+    <div class="p-6 space-y-5">
+      <!-- Provider -->
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-2">AI 提供商</label>
+        <div class="flex gap-4">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="radio" name="ai_provider" value="ollama" class="text-blue-600"> Ollama
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="radio" name="ai_provider" value="openai" class="text-blue-600"> OpenAI
+          </label>
+        </div>
+      </div>
+      <!-- Model -->
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">模型名称</label>
+        <input id="setting-model" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="gpt-4o-mini">
+      </div>
+      <!-- API Key -->
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">API Key</label>
+        <input id="setting-apikey" type="password" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="sk-...">
+      </div>
+      <!-- Base URL -->
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Base URL</label>
+        <input id="setting-baseurl" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="https://api.openai.com/v1">
+      </div>
+      <!-- Tone -->
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">默认语气</label>
+        <select id="setting-tone" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="正式">正式</option>
+          <option value="友好">友好</option>
+          <option value="简洁">简洁</option>
+        </select>
+      </div>
+      <!-- Test connection -->
+      <div>
+        <button id="testConnBtn" class="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 transition flex items-center gap-2">
+          <i class="fa fa-plug"></i> 测试连接
+        </button>
+        <span id="testResult" class="ml-3 text-sm hidden"></span>
+      </div>
+      <!-- Resume upload -->
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-2">简历上传</label>
+        <div id="resumeDropZone" class="upload-zone border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-blue-400 transition">
+          <i class="fa fa-cloud-upload fa-2x text-gray-400 mb-2"></i>
+          <p class="text-sm text-gray-500">拖拽简历文件到此处，或点击选择</p>
+          <p class="text-xs text-gray-400 mt-1">支持 PDF、DOC、DOCX 格式</p>
+          <input id="resumeFileInput" type="file" accept=".pdf,.doc,.docx" class="hidden">
+        </div>
+        <div id="resumeResult" class="mt-3 p-3 bg-gray-50 rounded-lg text-sm hidden"></div>
+      </div>
+    </div>
+    <div class="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+      <button class="close-modal px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition">取消</button>
+      <button id="saveSettingsBtn" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">保存设置</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Context Menu ===== -->
+<div id="contextMenu" class="fixed bg-white shadow-xl rounded-lg py-1 hidden z-50 min-w-[140px] border border-gray-200">
+  <button id="ctxViewMsg" class="context-menu-item w-full text-left px-4 py-2 text-sm flex items-center gap-2">
+    <i class="fa fa-comment-o text-gray-500 w-4"></i> 查看消息
+  </button>
+  <button id="ctxDelete" class="context-menu-item w-full text-left px-4 py-2 text-sm flex items-center gap-2 text-red-600">
+    <i class="fa fa-trash-o text-red-500 w-4"></i> 删除
+  </button>
+</div>
+
+<!-- ===== Toast ===== -->
+<div id="toast" class="fixed top-4 right-4 z-[100] hidden">
+  <div class="toast-anim px-5 py-3 rounded-lg shadow-lg text-white text-sm flex items-center gap-2" id="toastInner">
+    <i class="fa fa-check-circle" id="toastIcon"></i>
+    <span id="toastMsg"></span>
+  </div>
+</div>
+
+<script>
+// ====== API Layer ======
+if (!window.api) {
+  window.api = {
+    async request(method, path, body) {
+      console.log('[API]', method, path, body);
+      return {};
+    },
+    get(path) { return this.request('GET', path); },
+    post(path, body) { return this.request('POST', path, body); },
+    put(path, body) { return this.request('PUT', path, body); },
+    delete(path) { return this.request('DELETE', path); },
+  };
+}
+
+// ====== State ======
+const state = {
+  currentTab: 'applications',
+  applications: [],
+  messages: [],
+  templates: [],
+  stats: null,
+  selectedAppId: null,
+  selectedAppName: '',
+  selectedAppPosition: '',
+  msgAppList: [],
+  currentTone: '友好',
+  pendingHRMessage: '',
+  generatedReplies: [],
+  selectedReply: '',
+  copySendEnabled: false,
+  editingTemplateId: null,
+  contextAppId: null,
+};
+
+// ====== Utility Functions ======
+function $(id) { return document.getElementById(id); }
+
+function timeAgo(dateStr) {
+  if (!dateStr) return '';
+  const now = new Date();
+  const d = new Date(dateStr);
+  const diff = now - d;
+  if (diff < 60000) return '刚刚';
+  const min = Math.floor(diff / 60000);
+  if (min < 60) return min + '分钟前';
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return hr + '小时前';
+  const day = Math.floor(hr / 24);
+  if (day < 7) return day + '天前';
+  return (d.getMonth() + 1) + '月' + d.getDate() + '日';
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+function formatShortDate(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  return (d.getMonth() + 1) + '/' + d.getDate();
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text || '';
+  return div.innerHTML;
+}
+
+// ====== Toast ======
+let toastTimer = null;
+function toast(msg, type) {
+  type = type || 'success';
+  const el = $('toast');
+  const inner = $('toastInner');
+  const icon = $('toastIcon');
+  const msgEl = $('toastMsg');
+  const colors = { success: 'bg-green-600', error: 'bg-red-600', info: 'bg-blue-600', warning: 'bg-yellow-600' };
+  const icons = { success: 'fa-check-circle', error: 'fa-times-circle', info: 'fa-info-circle', warning: 'fa-exclamation-triangle' };
+  inner.className = 'toast-anim px-5 py-3 rounded-lg shadow-lg text-white text-sm flex items-center gap-2 ' + (colors[type] || colors.success);
+  icon.className = 'fa ' + (icons[type] || icons.success);
+  msgEl.textContent = msg;
+  el.classList.remove('hidden');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.add('hidden'), 3000);
+}
+
+// ====== Tab Switching ======
+function switchTab(tab) {
+  state.currentTab = tab;
+  document.querySelectorAll('.tab-pane').forEach(el => el.classList.add('hidden'));
+  const pane = $('tab-' + tab);
+  if (pane) pane.classList.remove('hidden');
+  document.querySelectorAll('.tab-sidebar-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === tab);
+  });
+  const titles = { applications: '投递管理', messages: '消息助手', search: '公司搜索', stats: '数据统计', templates: '模板管理' };
+  $('pageTitle').textContent = titles[tab] || tab;
+  if (tab === 'messages') loadMsgAppList();
+  if (tab === 'stats') loadStats();
+  if (tab === 'templates') loadTemplates();
+}
+
+// ====== Modal Helpers ======
+function openModal(id) { $(id).classList.remove('hidden'); }
+function closeModal(id) { $(id).classList.add('hidden'); }
+
+document.querySelectorAll('.close-modal').forEach(btn => {
+  btn.addEventListener('click', function() {
+    this.closest('.fixed').classList.add('hidden');
+  });
+});
+document.querySelectorAll('.fixed').forEach(el => {
+  el.addEventListener('click', function(e) {
+    if (e.target === this && !this.querySelector('.context-menu-item')) this.classList.add('hidden');
+  });
+});
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.fixed:not(.hidden)').forEach(el => {
+      if (el.id !== 'contextMenu') el.classList.add('hidden');
+    });
+    hideContextMenu();
+  }
+});
+
+// ====== Connection Check ======
+async function checkConnection() {
+  try {
+    const res = await window.api.get('/api/health');
+    const el = $('connectionStatus');
+    if (res && res.status === 'ok') {
+      el.className = 'text-xs px-2 py-1 rounded-full bg-green-100 text-green-700';
+      el.innerHTML = '<i class="fa fa-circle"></i> 已连接';
+    }
+  } catch(e) {
+    // silently ignore
+  }
+}
+
+// ====== Tab 1: Application Kanban ======
+async function loadApplications() {
+  try {
+    const res = await window.api.get('/api/applications');
+    state.applications = (res.applications || []).map(a => ({
+      ...a,
+      parsedTime: timeAgo(a.created_at || a.updated_at),
+    }));
+    renderKanban();
+  } catch(e) {
+    toast('加载投递记录失败: ' + e.message, 'error');
+  }
+}
+
+function renderKanban() {
+  const container = $('kanbanContainer');
+  const keyword = ($('searchInput')?.value || '').trim().toLowerCase();
+  const filtered = keyword
+    ? state.applications.filter(a => (a.company + a.position).toLowerCase().includes(keyword))
+    : state.applications;
+  const columns = ['待投', '已投', '面试', '已拒'];
+  const colColors = { '待投': { bg: 'bg-blue-50', header: 'text-blue-700', badge: 'bg-blue-100 text-blue-700' },
+    '已投': { bg: 'bg-amber-50', header: 'text-amber-700', badge: 'bg-amber-100 text-amber-700' },
+    '面试': { bg: 'bg-green-50', header: 'text-green-700', badge: 'bg-green-100 text-green-700' },
+    '已拒': { bg: 'bg-red-50', header: 'text-red-700', badge: 'bg-red-100 text-red-700' } };
+  container.innerHTML = columns.map(status => {
+    const cards = filtered.filter(a => a.status === status);
+    const cc = colColors[status] || { bg: 'bg-gray-50', header: 'text-gray-700', badge: 'bg-gray-100 text-gray-700' };
+    return `<div class="kanban-col flex-1 min-w-[220px] ${cc.bg} rounded-lg flex flex-col" data-status="${status}">
+      <div class="p-3 font-semibold text-sm border-b ${cc.bg} rounded-t-lg flex items-center justify-between flex-shrink-0">
+        <span class="${cc.header}">${status}</span>
+        <span class="text-xs px-2 py-0.5 rounded-full ${cc.badge}">${cards.length}</span>
+      </div>
+      <div class="card-list flex-1 overflow-y-auto p-2 space-y-2 min-h-0" data-status="${status}"
+           ondragover="event.preventDefault(); event.dataTransfer.dropEffect='move'; this.closest('.kanban-col').classList.add('drag-over')"
+           ondragleave="this.closest('.kanban-col').classList.remove('drag-over')"
+           ondrop="handleDrop(event)">
+        ${cards.length === 0 ? '<div class="text-center text-gray-400 text-xs py-6">暂无投递</div>' : ''}
+        ${cards.map(a => `<div class="kanban-card bg-white rounded-lg p-3 shadow-sm border border-gray-200 hover:shadow-md transition cursor-pointer"
+             draggable="true" data-id="${a.id}"
+             ondragstart="handleDragStart(event)"
+             ondragend="handleDragEnd(event)"
+             oncontextmenu="showContextMenu(event, ${a.id})"
+             onclick="handleCardClick(event, ${a.id})">
+          <div class="font-medium text-sm text-gray-800 truncate">${escapeHtml(a.company)}</div>
+          <div class="text-xs text-gray-500 mt-0.5 truncate">${escapeHtml(a.position)}</div>
+          <div class="flex items-center gap-2 mt-1.5 text-xs text-gray-400">
+            ${a.salary ? `<span><i class="fa fa-money"></i> ${escapeHtml(a.salary)}</span>` : ''}
+            ${a.location ? `<span><i class="fa fa-map-marker"></i> ${escapeHtml(a.location)}</span>` : ''}
+          </div>
+          <div class="text-xs text-gray-400 mt-1">${a.parsedTime || ''}</div>
+        </div>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function handleDragStart(e) {
+  const card = e.target.closest('.kanban-card');
+  if (!card) return;
+  card.classList.add('dragging');
+  e.dataTransfer.setData('text/plain', card.dataset.id);
+  e.dataTransfer.effectAllowed = 'move';
+}
+
+function handleDragEnd(e) {
+  const card = e.target.closest('.kanban-card');
+  if (card) card.classList.remove('dragging');
+  document.querySelectorAll('.kanban-col').forEach(c => c.classList.remove('drag-over'));
+}
+
+async function handleDrop(e) {
+  e.preventDefault();
+  const id = e.dataTransfer.getData('text/plain');
+  const col = e.currentTarget.closest('.kanban-col');
+  if (!col) return;
+  const newStatus = col.dataset.status;
+  col.classList.remove('drag-over');
+  if (!id) return;
+  const app = state.applications.find(a => String(a.id) === id);
+  if (!app || app.status === newStatus) return;
+  try {
+    await window.api.put(`/api/applications/${id}/status`, { status: newStatus });
+    toast('状态已更新', 'success');
+    await loadApplications();
+  } catch(e) {
+    toast('更新失败: ' + e.message, 'error');
+  }
+}
+
+function handleCardClick(event, id) {
+  if (event.button !== 0) return;
+}
+
+async function saveNewApplication() {
+  const company = $('app-form-company').value.trim();
+  const position = $('app-form-position').value.trim();
+  if (!company || !position) {
+    toast('请填写公司和岗位', 'warning');
+    return;
+  }
+  const data = {
+    company, position,
+    salary: $('app-form-salary').value.trim(),
+    location: $('app-form-location').value.trim(),
+    link: $('app-form-link').value.trim(),
+    note: $('app-form-note').value.trim(),
+    status: '待投',
+  };
+  try {
+    await window.api.post('/api/applications', data);
+    toast('创建成功', 'success');
+    closeModal('modal-app');
+    clearAppForm();
+    await loadApplications();
+  } catch(e) {
+    toast('创建失败: ' + e.message, 'error');
+  }
+}
+
+function clearAppForm() {
+  ['company', 'position', 'salary', 'location', 'link', 'note'].forEach(f => {
+    $('app-form-' + f).value = '';
+  });
+}
+
+async function deleteApplication(id) {
+  if (!confirm('确定删除此投递记录？')) return;
+  try {
+    await window.api.delete('/api/applications/' + id);
+    toast('已删除', 'success');
+    hideContextMenu();
+    await loadApplications();
+  } catch(e) {
+    toast('删除失败: ' + e.message, 'error');
+  }
+}
+
+// ====== Context Menu ======
+function showContextMenu(event, id) {
+  event.preventDefault();
+  state.contextAppId = id;
+  const menu = $('contextMenu');
+  menu.style.left = event.clientX + 'px';
+  menu.style.top = event.clientY + 'px';
+  menu.classList.remove('hidden');
+}
+
+function hideContextMenu() {
+  $('contextMenu').classList.add('hidden');
+  state.contextAppId = null;
+}
+
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('#contextMenu')) hideContextMenu();
+});
+
+// ====== Tab 2: Message Assistant ======
+async function loadMsgAppList() {
+  try {
+    const res = await window.api.get('/api/applications');
+    state.msgAppList = res.applications || [];
+    const list = $('msgAppList');
+    if (state.msgAppList.length === 0) {
+      list.innerHTML = '<div class="p-4 text-center text-gray-400 text-sm">暂无投递记录</div>';
+      return;
+    }
+    list.innerHTML = state.msgAppList.map(a =>
+      `<div class="msg-app-item px-3 py-2.5 border-b border-gray-100 cursor-pointer hover:bg-blue-50 transition text-sm ${state.selectedAppId === a.id ? 'bg-blue-50 border-l-2 border-l-blue-500' : ''}" data-id="${a.id}" onclick="selectMsgApp(${a.id})">
+        <div class="font-medium text-gray-800 truncate">${escapeHtml(a.company)}</div>
+        <div class="text-xs text-gray-500 truncate mt-0.5">${escapeHtml(a.position)}</div>
+      </div>`
+    ).join('');
+  } catch(e) {
+    toast('加载投递列表失败', 'error');
+  }
+}
+
+async function selectMsgApp(id) {
+  state.selectedAppId = id;
+  const app = state.msgAppList.find(a => a.id === id);
+  if (app) {
+    state.selectedAppName = app.company;
+    state.selectedAppPosition = app.position;
+    $('msgHeader').innerHTML = `<i class="fa fa-building-o text-blue-600"></i><span class="font-medium text-sm">${escapeHtml(app.company)}</span><span class="text-gray-400 text-sm">- ${escapeHtml(app.position)}</span>`;
+    $('generateBtn').disabled = false;
+  }
+  loadMsgAppList(); // re-render to show active
+  await loadMessages(id);
+}
+
+async function loadMessages(appId) {
+  try {
+    const res = await window.api.get(`/api/applications/${appId}/messages`);
+    state.messages = res.messages || [];
+    renderChat();
+  } catch(e) {
+    toast('加载消息失败', 'error');
+  }
+}
+
+function renderChat() {
+  const chat = $('msgChat');
+  if (state.messages.length === 0) {
+    chat.innerHTML = '<div class="flex items-center justify-center h-full text-gray-400 text-sm"><i class="fa fa-comment-o mr-2"></i>暂无消息记录，开始新对话</div>';
+    return;
+  }
+  chat.innerHTML = state.messages.map(m => {
+    const isHR = m.role === 'hr';
+    return `<div class="flex ${isHR ? 'justify-start' : 'justify-end'}">
+      <div class="msg-bubble ${isHR ? 'bg-white border border-gray-200' : 'bg-blue-600 text-white'} rounded-lg px-4 py-2.5 shadow-sm">
+        <div class="text-xs ${isHR ? 'text-gray-400' : 'text-blue-200'} mb-1">${isHR ? 'HR' : '我'}</div>
+        <div class="text-sm whitespace-pre-wrap">${escapeHtml(m.content)}</div>
+        <div class="text-xs ${isHR ? 'text-gray-400' : 'text-blue-200'} mt-1 text-right">${timeAgo(m.created_at)}</div>
+      </div>
+    </div>`;
+  }).join('');
+  chat.scrollTop = chat.scrollHeight;
+}
+
+async function generateReply() {
+  const hrMsg = $('msgTextarea').value.trim();
+  if (!hrMsg) {
+    toast('请先粘贴 HR 的消息', 'warning');
+    return;
+  }
+  if (!state.selectedAppId) {
+    toast('请先选择一个投递记录', 'warning');
+    return;
+  }
+  state.pendingHRMessage = hrMsg;
+  $('generateBtn').disabled = true;
+  $('generateBtn').innerHTML = '<i class="fa fa-spinner fa-spin"></i> 生成中...';
+  try {
+    const res = await window.api.post('/api/ai/reply', {
+      hr_message: hrMsg,
+      company: state.selectedAppName,
+      position: state.selectedAppPosition,
+    });
+    state.generatedReplies = res.replies || [];
+    state.selectedReply = '';
+    renderCandidates();
+  } catch(e) {
+    toast('生成回复失败: ' + e.message, 'error');
+  } finally {
+    $('generateBtn').disabled = false;
+    $('generateBtn').innerHTML = '生成回复';
+  }
+}
+
+function renderCandidates() {
+  const area = $('candidatesArea');
+  const list = $('candidatesList');
+  if (state.generatedReplies.length === 0) {
+    area.classList.add('hidden');
+    return;
+  }
+  area.classList.remove('hidden');
+  list.innerHTML = state.generatedReplies.map((r, i) =>
+    `<div class="candidate-card border border-gray-200 rounded-lg p-3 cursor-pointer ${state.selectedReply === r ? 'selected' : ''}" onclick="selectCandidate(${i})">
+      <div class="text-xs text-gray-400 mb-1">候选 ${i + 1}</div>
+      <div class="text-sm whitespace-pre-wrap">${escapeHtml(r)}</div>
+    </div>`
+  ).join('');
+}
+
+function selectCandidate(index) {
+  const reply = state.generatedReplies[index];
+  state.selectedReply = reply;
+  $('msgTextarea').value = reply;
+  state.copySendEnabled = true;
+  renderCandidates();
+}
+
+async function copyAndSend() {
+  const reply = $('msgTextarea').value.trim();
+  if (!reply) return;
+  try {
+    await navigator.clipboard.writeText(reply);
+    toast('已复制到剪贴板', 'success');
+  } catch(e) {
+    // fallback
+    const textarea = $('msgTextarea');
+    textarea.select();
+    document.execCommand('copy');
+  }
+  // Save messages
+  if (state.selectedAppId) {
+    try {
+      if (state.pendingHRMessage) {
+        await window.api.post(`/api/applications/${state.selectedAppId}/messages`, { role: 'hr', content: state.pendingHRMessage });
+      }
+      await window.api.post(`/api/applications/${state.selectedAppId}/messages`, { role: 'user', content: reply });
+      await loadMessages(state.selectedAppId);
+      state.pendingHRMessage = '';
+      state.selectedReply = '';
+      state.generatedReplies = [];
+      $('candidatesArea').classList.add('hidden');
+      $('msgTextarea').value = '';
+      toast('已保存消息记录', 'info');
+    } catch(e) {
+      toast('保存消息失败: ' + e.message, 'error');
+    }
+  }
+}
+
+// ====== Tab 3: Company Search ======
+function loadSearchUrl() {
+  const url = $('searchUrlInput').value.trim();
+  const container = $('webviewContainer');
+  const placeholder = $('webviewPlaceholder');
+  // Check for Electron webview
+  const isElectron = navigator.userAgent.includes('Electron');
+  if (isElectron) {
+    // Remove existing webview
+    const existing = container.querySelector('webview');
+    if (existing) existing.remove();
+    const wv = document.createElement('webview');
+    wv.src = url || 'https://www.zhipin.com/';
+    wv.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;border:none';
+    container.appendChild(wv);
+    placeholder.classList.add('hidden');
+  } else {
+    // Iframe fallback in browser
+    const existing = container.querySelector('iframe');
+    if (existing) existing.remove();
+    const iframe = document.createElement('iframe');
+    iframe.src = url || 'https://www.zhipin.com/';
+    iframe.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;border:none';
+    container.appendChild(iframe);
+    placeholder.innerHTML = '<p class="text-xs text-gray-400 mt-2">页面加载中... (部分网站可能阻止 iframe 嵌入)</p>';
+  }
+}
+
+async function saveCurrentJob() {
+  const isElectron = navigator.userAgent.includes('Electron');
+  if (isElectron) {
+    try {
+      const wv = document.querySelector('webview');
+      if (wv) {
+        const title = await wv.executeJavaScript('document.title');
+        const url = wv.getURL();
+        const company = title ? title.replace(/招聘|BOSS直聘| -\s*/g, '').trim() : '未知公司';
+        $('app-form-company').value = company;
+        $('app-form-link').value = url;
+        openModal('modal-app');
+        toast('已提取页面信息', 'info');
+        return;
+      }
+    } catch(e) {
+      toast('提取信息失败，请手动填写', 'warning');
+    }
+  } else {
+    toast('收藏功能仅在 Electron 中可用', 'info');
+  }
+  // Fallback: open empty app form
+  clearAppForm();
+  $('app-form-link').value = $('searchUrlInput').value || '';
+  openModal('modal-app');
+}
+
+// ====== Tab 4: Statistics ======
+async function loadStats() {
+  const container = $('statsContent');
+  try {
+    const res = await window.api.get('/api/stats');
+    state.stats = res;
+    renderStats();
+  } catch(e) {
+    container.innerHTML = '<div class="text-center text-red-400 py-20"><i class="fa fa-exclamation-triangle mr-2"></i>加载统计数据失败</div>';
+  }
+}
+
+function renderStats() {
+  const s = state.stats || { total: 0, by_status: {}, by_company: [], by_date: [] };
+  const bs = s.by_status || {};
+  const total = s.total || 0;
+  const interview = bs['面试'] || 0;
+  const sent = bs['已投'] || 0;
+  const pending = bs['待投'] || 0;
+  const rejected = bs['已拒'] || 0;
+
+  // Top 4 stat cards
+  const cards = [
+    { label: '总投递', value: total, icon: 'fa-send', color: 'text-blue-600', bg: 'bg-blue-100' },
+    { label: '已面试', value: interview, icon: 'fa-handshake-o', color: 'text-green-600', bg: 'bg-green-100' },
+    { label: '已投递', value: sent, icon: 'fa-paper-plane', color: 'text-amber-600', bg: 'bg-amber-100' },
+    { label: '待处理', value: pending, icon: 'fa-clock-o', color: 'text-purple-600', bg: 'bg-purple-100' },
+  ];
+
+  // Bar chart data (reversed for chronological)
+  const dates = (s.by_date || []).slice().reverse();
+  const maxCnt = Math.max(...dates.map(d => d.cnt || 0), 1);
+
+  // Donut chart
+  const statusOrder = ['待投', '已投', '面试', '已拒'];
+  const statusColors = ['#3B82F6', '#F59E0B', '#10B981', '#EF4444'];
+  const statusLabels = ['待投', '已投', '面试', '已拒'];
+
+  const donutData = statusOrder.map((st, i) => ({ label: statusLabels[i], value: bs[st] || 0, color: statusColors[i] }));
+  const donutTotal = donutData.reduce((a, b) => a + b.value, 0) || 1;
+  let angle = 0;
+  const gradientParts = donutData.filter(d => d.value > 0).map(d => {
+    const deg = (d.value / donutTotal) * 360;
+    const start = angle;
+    angle += deg;
+    return `${d.color} ${start}deg ${angle}deg`;
+  });
+  const donutGradient = gradientParts.length > 0 ? `conic-gradient(${gradientParts.join(', ')})` : 'conic-gradient(#e5e7eb 0deg 360deg)';
+
+  // Company ranking
+  const companies = s.by_company || [];
+
+  const html = `
+    <!-- Stat Cards -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      ${cards.map(c => `<div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-xs text-gray-500 uppercase tracking-wide">${c.label}</p>
+            <p class="text-2xl font-bold mt-1 ${c.color}">${c.value}</p>
+          </div>
+          <div class="w-12 h-12 ${c.bg} rounded-full flex items-center justify-center ${c.color}">
+            <i class="fa ${c.icon} text-xl"></i>
+          </div>
+        </div>
+      </div>`).join('')}
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+      <!-- Bar Chart -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+        <h3 class="font-semibold text-sm text-gray-700 mb-4">每日投递量</h3>
+        <div class="flex items-end gap-1.5 h-48" style="padding: 0 4px;">
+          ${dates.length === 0 ? '<div class="flex items-center justify-center w-full h-full text-gray-400 text-sm">暂无数据</div>' :
+            dates.map(d => {
+              const pct = (d.cnt / maxCnt) * 100;
+              return `<div class="flex-1 flex flex-col items-center justify-end" title="${d.date}: ${d.cnt}">
+                <div class="chart-bar w-full max-w-[32px] bg-blue-500 rounded-t" style="height:${Math.max(pct, 2)}%"></div>
+                <span class="text-xs text-gray-400 mt-1 transform -rotate-45 origin-left whitespace-nowrap">${formatShortDate(d.date)}</span>
+              </div>`;
+            }).join('')}
+        </div>
+      </div>
+
+      <!-- Donut Chart -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+        <h3 class="font-semibold text-sm text-gray-700 mb-4">状态分布</h3>
+        <div class="flex items-center justify-center gap-8">
+          <div class="donut-ring w-36 h-36 flex-shrink-0" style="background: ${donutGradient}; border: 2px solid white; box-shadow: 0 0 0 1px #e5e7eb;"></div>
+          <div class="space-y-2">
+            ${donutData.map(d => `<div class="flex items-center gap-2 text-sm">
+              <span class="w-3 h-3 rounded-full flex-shrink-0" style="background:${d.color}"></span>
+              <span class="text-gray-600">${d.label}</span>
+              <span class="font-medium text-gray-800">${d.value}</span>
+            </div>`).join('')}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Company Ranking -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+      <h3 class="font-semibold text-sm text-gray-700 mb-4">公司投递排行</h3>
+      ${companies.length === 0 ? '<div class="text-center text-gray-400 py-8 text-sm">暂无数据</div>' :
+        `<div class="space-y-2">
+          ${companies.map((c, i) => `<div class="flex items-center gap-3 py-2 border-b border-gray-100 last:border-0">
+            <span class="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-xs font-medium text-gray-600 flex-shrink-0">${i + 1}</span>
+            <span class="flex-1 text-sm text-gray-800">${escapeHtml(c.company)}</span>
+            <div class="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden max-w-[200px]">
+              <div class="h-full bg-blue-500 rounded-full" style="width:${Math.min((c.cnt / Math.max(...companies.map(x => x.cnt), 1)) * 100, 100)}%"></div>
+            </div>
+            <span class="text-sm font-medium text-gray-600 w-8 text-right">${c.cnt}</span>
+          </div>`).join('')}
+        </div>`}
+    </div>
+  `;
+  $('statsContent').innerHTML = html;
+}
+
+// ====== Tab 5: Templates ======
+async function loadTemplates() {
+  try {
+    const res = await window.api.get('/api/templates');
+    state.templates = res.templates || [];
+    renderTemplates();
+  } catch(e) {
+    toast('加载模板失败', 'error');
+  }
+}
+
+function renderTemplates() {
+  const grid = $('templateGrid');
+  if (state.templates.length === 0) {
+    grid.innerHTML = '<div class="col-span-full text-center text-gray-400 py-20"><i class="fa fa-file-text-o fa-3x mb-3"></i><p class="text-sm">暂无模板，点击右上角创建</p></div>';
+    return;
+  }
+  grid.innerHTML = state.templates.map(t =>
+    `<div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 hover:shadow-md transition group relative">
+      <div class="flex items-start justify-between">
+        <h4 class="font-medium text-sm text-gray-800 truncate flex-1">${escapeHtml(t.name)}</h4>
+        <button onclick="deleteTemplate(${t.id})" class="text-gray-300 hover:text-red-500 transition opacity-0 group-hover:opacity-100 ml-2" title="删除">
+          <i class="fa fa-trash-o"></i>
+        </button>
+      </div>
+      <div class="mt-2 text-xs text-gray-500 line-clamp-3" title="${escapeHtml(t.content)}">
+        ${escapeHtml(t.content).substring(0, 120)}${(t.content || '').length > 120 ? '...' : ''}
+      </div>
+      <div class="mt-2 text-xs text-gray-400">${timeAgo(t.created_at)}</div>
+    </div>`
+  ).join('');
+}
+
+function openNewTemplateModal() {
+  state.editingTemplateId = null;
+  $('templateModalTitle').textContent = '新建模板';
+  $('template-form-name').value = '';
+  $('template-form-content').value = '';
+  openModal('modal-template');
+}
+
+async function saveTemplate() {
+  const name = $('template-form-name').value.trim();
+  const content = $('template-form-content').value.trim();
+  if (!name || !content) {
+    toast('请填写模板名称和内容', 'warning');
+    return;
+  }
+  try {
+    if (state.editingTemplateId) {
+      await window.api.delete('/api/templates/' + state.editingTemplateId);
+    }
+    await window.api.post('/api/templates', { name, content });
+    toast('模板已保存', 'success');
+    closeModal('modal-template');
+    await loadTemplates();
+  } catch(e) {
+    toast('保存模板失败: ' + e.message, 'error');
+  }
+}
+
+async function deleteTemplate(id) {
+  if (!confirm('确定删除此模板？')) return;
+  try {
+    await window.api.delete('/api/templates/' + id);
+    toast('已删除', 'success');
+    await loadTemplates();
+  } catch(e) {
+    toast('删除失败: ' + e.message, 'error');
+  }
+}
+
+function insertVariable(v) {
+  const ta = $('template-form-content');
+  const start = ta.selectionStart;
+  const end = ta.selectionEnd;
+  const text = ta.value;
+  ta.value = text.substring(0, start) + v + text.substring(end);
+  ta.focus();
+  const pos = start + v.length;
+  ta.selectionStart = ta.selectionEnd = pos;
+}
+
+// ====== Settings ======
+async function loadSettings() {
+  try {
+    const res = await window.api.get('/api/settings');
+    if (!res) return;
+    // Provider radio
+    document.querySelectorAll('input[name="ai_provider"]').forEach(r => {
+      r.checked = r.value === (res.ai_provider || 'ollama');
+    });
+    $('setting-model').value = res.ai_model || '';
+    $('setting-apikey').value = res.openai_api_key || '';
+    $('setting-baseurl').value = res.openai_base_url || '';
+    $('setting-tone').value = res.tone || '友好';
+  } catch(e) {
+    // silent
+  }
+}
+
+async function saveSettings() {
+  const provider = document.querySelector('input[name="ai_provider"]:checked');
+  const data = {
+    ai_provider: provider ? provider.value : 'ollama',
+    ai_model: $('setting-model').value.trim(),
+    openai_api_key: $('setting-apikey').value.trim(),
+    openai_base_url: $('setting-baseurl').value.trim(),
+    tone: $('setting-tone').value,
+  };
+  try {
+    await window.api.post('/api/settings', data);
+    toast('设置已保存', 'success');
+    closeModal('modal-settings');
+  } catch(e) {
+    toast('保存设置失败: ' + e.message, 'error');
+  }
+}
+
+async function testConnection() {
+  const provider = document.querySelector('input[name="ai_provider"]:checked');
+  const btn = $('testConnBtn');
+  const result = $('testResult');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> 测试中...';
+  result.className = 'ml-3 text-sm hidden';
+  try {
+    const res = await window.api.post('/api/ai/test', { provider: provider ? provider.value : 'ollama' });
+    if (res && res.ok) {
+      result.className = 'ml-3 text-sm text-green-600';
+      result.innerHTML = '<i class="fa fa-check-circle"></i> 连接成功';
+      toast('连接成功', 'success');
+    } else {
+      result.className = 'ml-3 text-sm text-red-600';
+      result.innerHTML = '<i class="fa fa-times-circle"></i> 连接失败';
+      toast('连接失败，请检查配置', 'error');
+    }
+  } catch(e) {
+    result.className = 'ml-3 text-sm text-red-600';
+    result.innerHTML = '<i class="fa fa-times-circle"></i> 连接失败: ' + e.message;
+    toast('连接失败', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa fa-plug"></i> 测试连接';
+    result.classList.remove('hidden');
+  }
+}
+
+// ====== Resume Upload ======
+function setupResumeUpload() {
+  const zone = $('resumeDropZone');
+  const input = $('resumeFileInput');
+
+  zone.addEventListener('click', () => input.click());
+
+  zone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    zone.classList.add('drag-over');
+  });
+  zone.addEventListener('dragleave', () => {
+    zone.classList.remove('drag-over');
+  });
+  zone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    zone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) uploadResumeFile(file);
+  });
+  input.addEventListener('change', () => {
+    if (input.files[0]) uploadResumeFile(input.files[0]);
+  });
+}
+
+async function uploadResumeFile(file) {
+  const formData = new FormData();
+  formData.append('file', file);
+  const result = $('resumeResult');
+  result.className = 'mt-3 p-3 bg-gray-50 rounded-lg text-sm';
+  result.innerHTML = '<i class="fa fa-spinner fa-spin text-blue-600"></i> 解析中...';
+  result.classList.remove('hidden');
+  try {
+    const resp = await fetch('http://127.0.0.1:5678/api/resume', {
+      method: 'POST',
+      body: formData,
+    });
+    const data = await resp.json();
+    if (data.error) {
+      result.innerHTML = '<span class="text-red-600"><i class="fa fa-times-circle"></i> 解析失败: ' + escapeHtml(data.error) + '</span>';
+      return;
+    }
+    result.innerHTML = '<div class="text-green-600 font-medium mb-1"><i class="fa fa-check-circle"></i> 解析成功</div>'
+      + Object.entries(data).map(([k, v]) =>
+        `<div class="flex gap-2 text-xs mt-1"><span class="text-gray-500 w-16 flex-shrink-0">${k}</span><span class="text-gray-800">${escapeHtml(String(v))}</span></div>`
+      ).join('');
+    toast('简历解析成功', 'success');
+  } catch(e) {
+    result.innerHTML = '<span class="text-red-600"><i class="fa fa-times-circle"></i> 上传失败: ' + escapeHtml(e.message) + '</span>';
+  }
+}
+
+// ====== Event Bindings ======
+function initEventBindings() {
+  // Sidebar tabs
+  document.querySelectorAll('.tab-sidebar-btn[data-tab]').forEach(btn => {
+    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+  });
+
+  // Settings
+  $('settingsBtn').addEventListener('click', () => {
+    loadSettings();
+    openModal('modal-settings');
+  });
+
+  // Tab 1: Applications
+  $('newAppBtn').addEventListener('click', () => {
+    clearAppForm();
+    openModal('modal-app');
+  });
+  $('saveAppBtn').addEventListener('click', saveNewApplication);
+  $('searchInput').addEventListener('input', () => renderKanban());
+
+  // Context menu
+  $('ctxDelete').addEventListener('click', () => {
+    if (state.contextAppId) deleteApplication(state.contextAppId);
+  });
+  $('ctxViewMsg').addEventListener('click', () => {
+    hideContextMenu();
+    if (state.contextAppId) {
+      switchTab('messages');
+      selectMsgApp(state.contextAppId);
+    }
+  });
+
+  // Tab 2: Messages
+  $('generateBtn').addEventListener('click', generateReply);
+  $('copySendBtn').addEventListener('click', copyAndSend);
+  document.querySelectorAll('.tone-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      state.currentTone = this.dataset.tone;
+      document.querySelectorAll('.tone-btn').forEach(b => {
+        b.className = 'tone-btn px-3 py-1 text-xs rounded-full border border-gray-300 hover:border-blue-500';
+      });
+      this.className = 'tone-btn px-3 py-1 text-xs rounded-full border border-blue-500 bg-blue-50 text-blue-700';
+      // Update setting
+      window.api.post('/api/settings', { tone: state.currentTone }).catch(() => {});
+    });
+  });
+
+  // Tab 3: Search
+  $('loadUrlBtn').addEventListener('click', loadSearchUrl);
+  $('searchUrlInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') loadSearchUrl(); });
+  $('saveJobBtn').addEventListener('click', saveCurrentJob);
+
+  // Tab 5: Templates
+  $('newTemplateBtn').addEventListener('click', openNewTemplateModal);
+  $('saveTemplateBtn').addEventListener('click', saveTemplate);
+  document.querySelectorAll('.var-btn').forEach(btn => {
+    btn.addEventListener('click', () => insertVariable(btn.dataset.var));
+  });
+
+  // Settings
+  $('saveSettingsBtn').addEventListener('click', saveSettings);
+  $('testConnBtn').addEventListener('click', testConnection);
+
+  // Resume upload
+  setupResumeUpload();
+
+  // Keyboard shortcuts: Enter in app form
+  document.querySelectorAll('#modal-app input').forEach(inp => {
+    inp.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') saveNewApplication();
+    });
+  });
+}
+
+// ====== Init ======
+async function init() {
+  initEventBindings();
+  await checkConnection();
+  await loadApplications();
+  // Load settings in background for tone state
+  try {
+    const res = await window.api.get('/api/settings');
+    if (res && res.tone) {
+      state.currentTone = res.tone;
+      document.querySelectorAll('.tone-btn').forEach(b => {
+        b.className = 'tone-btn px-3 py-1 text-xs rounded-full border border-gray-300 hover:border-blue-500';
+        if (b.dataset.tone === res.tone) {
+          b.className = 'tone-btn px-3 py-1 text-xs rounded-full border border-blue-500 bg-blue-50 text-blue-700';
+        }
+      });
+    }
+  } catch(e) {}
+  console.log('简历投递助手前端已加载');
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
 </body>
 </html>
