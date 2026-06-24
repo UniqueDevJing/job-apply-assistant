@@ -11,6 +11,7 @@ from ai import generate_reply, test_ai_connection
 from resume_parser import parse_resume
 import os
 import shutil
+import tempfile
 
 app = FastAPI(title="Job Apply Assistant", version="1.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -108,7 +109,7 @@ async def remove_template(id: int):
 
 @app.post("/api/resume")
 async def upload_resume(file: UploadFile = File(...)):
-    tmp = f"C:/Users/Dominion/AppData/Local/Temp/{file.filename}"
+    tmp = os.path.join(tempfile.gettempdir(), file.filename)
     with open(tmp, "wb") as f:
         shutil.copyfileobj(file.file, f)
     info = await parse_resume(tmp)
