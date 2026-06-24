@@ -1,4 +1,5 @@
 """SQLite 数据库操作"""
+import json
 import os
 import aiosqlite
 
@@ -13,6 +14,7 @@ async def get_db():
         _pool = await aiosqlite.connect(DB_PATH)
         _pool.row_factory = aiosqlite.Row
         await _pool.execute("PRAGMA journal_mode=WAL")
+        await _pool.execute("PRAGMA foreign_keys=ON")
     return _pool
 
 
@@ -147,7 +149,6 @@ async def delete_template(id: int):
 
 
 async def save_resume_info(data: dict):
-    import json
     db = await get_db()
     await db.execute("DELETE FROM resume_info")
     await db.execute("INSERT INTO resume_info (data) VALUES (?)", (json.dumps(data, ensure_ascii=False),))
@@ -155,7 +156,6 @@ async def save_resume_info(data: dict):
 
 
 async def get_resume_info() -> dict | None:
-    import json
     db = await get_db()
     cur = await db.execute("SELECT data FROM resume_info ORDER BY id DESC LIMIT 1")
     row = await cur.fetchone()

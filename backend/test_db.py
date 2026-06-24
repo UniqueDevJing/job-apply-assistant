@@ -5,7 +5,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from db import init_db, add_application, list_applications, update_application_status, delete_application
 from db import add_message, get_messages, save_template, list_templates, delete_template
-from db import save_resume_info, get_resume_info, set_setting, get_setting, close_db
+from db import save_resume_info, get_resume_info, set_setting, get_setting, get_application_stats, close_db
 
 DB = os.path.join(os.path.dirname(__file__), "test_job.db")
 os.environ["JOB_DB_PATH"] = DB
@@ -45,6 +45,13 @@ async def main():
     # 设置
     await set_setting("tone", "正式")
     assert await get_setting("tone") == "正式"
+
+    # 统计
+    stats = await get_application_stats()
+    assert "total" in stats
+    assert "by_status" in stats
+    assert "by_company" in stats
+    assert "by_date" in stats
 
     # 清理
     await delete_application(aid)
