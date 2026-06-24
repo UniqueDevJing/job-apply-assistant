@@ -1,7 +1,7 @@
 """AI 引擎 - Ollama 优先，OpenAI 兼容 API 回退"""
 import os
 import json
-from db import get_resume_info, get_setting
+from backend.db import get_resume_info, get_setting
 
 
 async def _call_ollama(prompt: str) -> str | None:
