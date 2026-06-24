@@ -981,9 +981,14 @@ function renderTemplates() {
     `<div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 hover:shadow-md transition group relative">
       <div class="flex items-start justify-between">
         <h4 class="font-medium text-sm text-gray-800 truncate flex-1">${escapeHtml(t.name)}</h4>
-        <button onclick="deleteTemplate(${t.id})" class="text-gray-300 hover:text-red-500 transition opacity-0 group-hover:opacity-100 ml-2" title="删除">
-          <i class="fa fa-trash-o"></i>
-        </button>
+        <div class="flex items-center gap-0.5">
+          <button onclick="openEditTemplateModal(${t.id})" class="text-gray-300 hover:text-blue-500 transition opacity-0 group-hover:opacity-100" title="编辑">
+            <i class="fa fa-pencil"></i>
+          </button>
+          <button onclick="deleteTemplate(${t.id})" class="text-gray-300 hover:text-red-500 transition opacity-0 group-hover:opacity-100" title="删除">
+            <i class="fa fa-trash-o"></i>
+          </button>
+        </div>
       </div>
       <div class="mt-2 text-xs text-gray-500 line-clamp-3" title="${escapeHtml(t.content)}">
         ${escapeHtml(t.content).substring(0, 120)}${(t.content || '').length > 120 ? '...' : ''}
@@ -1001,6 +1006,16 @@ function openNewTemplateModal() {
   openModal('modal-template');
 }
 
+function openEditTemplateModal(id) {
+  const template = state.templates.find(t => t.id === id);
+  if (!template) return;
+  state.editingTemplateId = template.id;
+  $('templateModalTitle').textContent = '编辑模板';
+  $('template-form-name').value = template.name;
+  $('template-form-content').value = template.content;
+  openModal('modal-template');
+}
+
 async function saveTemplate() {
   const name = $('template-form-name').value.trim();
   const content = $('template-form-content').value.trim();
@@ -1008,13 +1023,17 @@ async function saveTemplate() {
     toast('请填写模板名称和内容', 'warning');
     return;
   }
+  const oldId = state.editingTemplateId;
   try {
-    if (state.editingTemplateId) {
-      await window.api.delete('/api/templates/' + state.editingTemplateId);
-    }
+    // POST the new/updated template first to avoid data loss on failure
     await window.api.post('/api/templates', { name, content });
+    // Only delete the old one after the new one is saved
+    if (oldId) {
+      await window.api.delete('/api/templates/' + oldId);
+    }
     toast('模板已保存', 'success');
     closeModal('modal-template');
+    state.editingTemplateId = null;
     await loadTemplates();
   } catch(e) {
     toast('保存模板失败: ' + e.message, 'error');
