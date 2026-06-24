@@ -1,7 +1,7 @@
 """AI 引擎 - Ollama 优先，OpenAI 兼容 API 回退"""
 import os
 import json
-from backend.db import get_resume_info, get_setting
+from db import get_resume_info, get_setting
 
 
 async def _call_ollama(prompt: str) -> str | None:
@@ -40,7 +40,7 @@ async def generate_reply(hr_message: str, company: str = "", position: str = "")
     resume_text = json.dumps(resume, ensure_ascii=False) if resume else "未上传简历"
 
     tone_guide = {
-        "正式": "用词正式礼貌，使用"您"称呼",
+        "正式": '用词正式礼貌，使用"您"称呼',
         "友好": "语气自然亲切，像朋友聊天",
         "简洁": "言简意赅，三句话内表达清楚",
     }
@@ -78,11 +78,11 @@ HR 的消息：
 
 async def test_ai_connection(provider: str = "ollama") -> bool:
     if provider == "ollama":
-        result = await _call_ollama("回复"好的"")
+        result = await _call_ollama('回复"好的"')
         return result is not None
     else:
         try:
-            await _call_openai_compatible("回复"好的"")
+            await _call_openai_compatible('回复"好的"')
             return True
         except Exception:
             return False
