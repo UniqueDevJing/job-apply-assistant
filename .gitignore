@@ -2,3 +2,6 @@ node_modules/
 __pycache__/
 *.pyc
 .env
+test_job.db
+test_job.db-wal
+test_job.db-shm
