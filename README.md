@@ -84,3 +84,7 @@ python backend/server.py
 # 后端运行在 http://127.0.0.1:5678
 # 前端访问 http://127.0.0.1:5678 可查看 API 文档（FastAPI 自动生成）
 ```
+
+## License
+
+MIT
